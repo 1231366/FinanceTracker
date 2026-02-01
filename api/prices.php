@@ -18,7 +18,6 @@ if ($type === 'crypto') {
     curl_close($ch);
     echo json_encode($res ?: []);
 } else {
-    // Busca de Preço Real para Stocks via Yahoo Finance
     $url = "https://query2.finance.yahoo.com/v1/finance/quote?symbols=$symbols";
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -28,7 +27,8 @@ if ($type === 'crypto') {
 
     if (isset($response['quoteResponse']['result'])) {
         foreach ($response['quoteResponse']['result'] as $quote) {
-            $results[$quote['symbol']] = [
+            // Normalizar a chave para maiúsculas para o frontend encontrar
+            $results[strtoupper($quote['symbol'])] = [
                 "eur" => $quote['regularMarketPrice']
             ];
         }

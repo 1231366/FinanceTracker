@@ -25,18 +25,15 @@ if ($method === 'POST') {
     $newPrice = floatval($data['price']);
 
     try {
-        // 1. Verificar se o ativo já existe
         $check = $db->prepare("SELECT id, quantity, buy_price FROM portfolio WHERE symbol = :symbol LIMIT 1");
         $check->execute([':symbol' => $symbol]);
         $existing = $check->fetch(PDO::FETCH_ASSOC);
 
         if ($existing) {
-            // 2. Lógica de Preço Médio Ponderado
             $oldQty = floatval(decryptData($existing['quantity']));
             $oldPrice = floatval(decryptData($existing['buy_price']));
 
             $totalQty = $oldQty + $newQty;
-            // Fórmul: ((Q1 * P1) + (Q2 * P2)) / Total Qty
             $avgPrice = (($oldQty * $oldPrice) + ($newQty * $newPrice)) / $totalQty;
 
             $update = $db->prepare("UPDATE portfolio SET quantity = :qty, buy_price = :price WHERE id = :id");
@@ -45,8 +42,8 @@ if ($method === 'POST') {
                 ':price' => encryptData($avgPrice),
                 ':id'    => $existing['id']
             ]);
+            $assetId = $existing['id'];
         } else {
-            // 3. Inserir novo se não existir
             $query = "INSERT INTO portfolio (symbol, asset_name, image_url, quantity, buy_price, asset_type) 
                       VALUES (:symbol, :name, :image, :qty, :price, :type)";
             $stmt = $db->prepare($query);
@@ -58,7 +55,13 @@ if ($method === 'POST') {
                 ':price'  => encryptData($newPrice),
                 ':type'   => $data['type'] ?? 'stock'
             ]);
+            $assetId = $db->lastInsertId();
         }
+
+        // REGISTO NO HISTÓRICO PARA O GRÁFICO
+        $hist = $db->prepare("INSERT INTO asset_history (asset_id, quantity_change) VALUES (:id, :qty)");
+        $hist->execute([':id' => $assetId, ':qty' => $newQty]);
+
         echo json_encode(["status" => "success"]);
     } catch (Exception $e) {
         echo json_encode(["status" => "error", "message" => $e->getMessage()]);

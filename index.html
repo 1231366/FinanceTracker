@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>WealthAI | Intelligence Engine</title>
+    <title>WealthAI | Master Intelligence</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100;300;400;700;900&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -24,6 +24,8 @@
         @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        .ai-glow { box-shadow: 0 0 30px rgba(99, 102, 241, 0.5); animation: pulse-ai 2s infinite ease-in-out; }
+        @keyframes pulse-ai { 0%, 100% { transform: scale(1) translateY(-12px); opacity: 0.8; } 50% { transform: scale(1.1) translateY(-15px); opacity: 1; } }
     </style>
 </head>
 <body>
@@ -42,10 +44,12 @@
         };
 
         const App = () => {
+            const [view, setView] = useState('dash'); // dash, ai, settings
             const [assets, setAssets] = useState([]);
             const [marketPrices, setMarketPrices] = useState({});
+            const [aiData, setAiData] = useState(null);
+            const [loadingAi, setLoadingAi] = useState(false);
             const [isModalOpen, setModalOpen] = useState(false);
-            const [selectedAsset, setSelectedAsset] = useState(null);
             const [searchResults, setSearchResults] = useState([]);
             const [formData, setFormData] = useState({ symbol: '', name: '', quantity: '', price: '', type: 'crypto', thumb: '' });
 
@@ -66,8 +70,6 @@
 
             const syncPrices = async (portfolio) => {
                 const updatedPrices = { ...marketPrices };
-
-                // CRYPTO SYNC
                 const cryptos = portfolio.filter(a => a.asset_type === 'crypto');
                 if(cryptos.length > 0) {
                     const ids = cryptos.map(a => cryptoMap[a.symbol.toUpperCase()] || a.symbol.toLowerCase()).join(',');
@@ -81,22 +83,18 @@
                         });
                     } catch(e) { console.error("Crypto Price Error", e); }
                 }
-
-                // STOCK SYNC
                 const stocks = portfolio.filter(a => a.asset_type === 'stock');
                 if(stocks.length > 0) {
-                    const symbols = stocks.map(a => a.symbol.split('.')[0].toUpperCase()).join(',');
+                    const symbols = stocks.map(a => a.symbol.toUpperCase()).join(',');
                     try {
                         const res = await fetch(`api/prices.php?symbols=${symbols}&type=stock`);
                         const data = await res.json();
                         stocks.forEach(a => {
-                            const sym = a.symbol.split('.')[0].toUpperCase();
-                            // Procurar no objeto retornado (pode vir como sym: {eur: val})
-                            if(data[sym] && data[sym].eur) updatedPrices[a.symbol.toUpperCase()] = data[sym].eur;
+                            const sym = a.symbol.toUpperCase();
+                            if(data[sym]) updatedPrices[sym] = data[sym].eur;
                         });
                     } catch(e) { console.error("Stock Price Error", e); }
                 }
-
                 setMarketPrices(updatedPrices);
             };
 
@@ -126,6 +124,17 @@
                 } catch (e) { console.error("Add Asset Error", e); }
             };
 
+            const runAI = async () => {
+                setView('ai');
+                setLoadingAi(true);
+                try {
+                    const res = await fetch('api/ai_engine.php');
+                    const data = await res.json();
+                    setAiData(data);
+                } catch (e) { console.error("AI Engine Error", e); }
+                finally { setLoadingAi(false); }
+            };
+
             useEffect(() => { fetchData(); }, []);
 
             const stats = useMemo(() => {
@@ -144,11 +153,12 @@
             }, [assets, marketPrices]);
 
             const renderMainChart = () => {
+                const el = document.querySelector("#mainChart");
+                if(!el || !assets.length || view !== 'dash') return;
                 const series = assets.map(a => {
                     const now = marketPrices[a.symbol.toUpperCase()] || parseFloat(a.buy_price);
                     return parseFloat(a.quantity) * now;
                 });
-                if(!series.length || series.every(v => v === 0)) return;
                 const options = {
                     series: series,
                     chart: { type: 'donut', height: 320, background: 'transparent' },
@@ -159,11 +169,11 @@
                     plotOptions: { pie: { donut: { size: '75%', background: 'transparent' } } },
                     dataLabels: { enabled: false }
                 };
-                const el = document.querySelector("#mainChart");
-                if(el) { el.innerHTML = ""; new ApexCharts(el, options).render(); }
+                el.innerHTML = ""; 
+                new ApexCharts(el, options).render();
             };
 
-            useEffect(() => { if (assets.length) renderMainChart(); }, [assets, marketPrices]);
+            useEffect(() => { renderMainChart(); }, [assets, marketPrices, view]);
 
             return (
                 <div className="min-h-screen pb-40">
@@ -172,72 +182,147 @@
                             <div className="w-10 h-10 neo-gradient rounded-xl rotate-12 flex items-center justify-center shadow-lg"><span className="font-black italic">W</span></div>
                             <h1 className="text-xl font-black italic tracking-tighter uppercase leading-none">WealthAI</h1>
                         </div>
-                        <div className="px-4 py-2 glass rounded-full text-[10px] font-bold text-zinc-500 uppercase tracking-widest italic">Stable Feed</div>
+                        <div className="px-4 py-2 glass rounded-full text-[10px] font-bold text-zinc-500 uppercase tracking-widest italic">{view === 'ai' ? 'Neural Link' : 'Live Feed'}</div>
                     </header>
 
                     <main className="px-6 md:px-10 max-w-7xl mx-auto mt-12">
-                        <section className="mb-16 text-center animate-float">
-                            <p className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.4em] mb-4 opacity-60 italic text-center">Consolidated Valuation</p>
-                            <h2 className="hero-title text-gradient italic mb-6 uppercase text-center">
-                                €{stats.current.toLocaleString('pt-PT', { minimumFractionDigits: 2 })}
-                            </h2>
-                            <div className={`inline-block px-6 py-2 rounded-full glass border ${stats.profit >= 0 ? 'border-emerald-500/20 text-emerald-400' : 'border-rose-500/20 text-rose-400'} font-bold text-sm italic`}>
-                                {stats.profit >= 0 ? '▲' : '▼'} €{Math.abs(stats.profit).toLocaleString('pt-PT', { minimumFractionDigits: 2 })} ({stats.pct.toFixed(2)}%)
-                            </div>
-                        </section>
+                        {view === 'dash' && (
+                            <div className="animate-in fade-in duration-700">
+                                <section className="mb-16 text-center animate-float">
+                                    <p className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.4em] mb-4 opacity-60 italic text-center">Consolidated Valuation</p>
+                                    <h2 className="hero-title text-gradient italic mb-6 uppercase text-center">
+                                        €{stats.current.toLocaleString('pt-PT', { minimumFractionDigits: 2 })}
+                                    </h2>
+                                    <div className={`inline-block px-6 py-2 rounded-full glass border ${stats.profit >= 0 ? 'border-emerald-500/20 text-emerald-400' : 'border-rose-500/20 text-rose-400'} font-bold text-sm italic`}>
+                                        {stats.profit >= 0 ? '▲' : '▼'} €{Math.abs(stats.profit).toLocaleString('pt-PT', { minimumFractionDigits: 2 })} ({stats.pct.toFixed(2)}%)
+                                    </div>
+                                </section>
 
-                        <div className="dashboard-grid">
-                            <div className="col-span-12 lg:col-span-7 glass rounded-[48px] p-10 flex flex-col items-center justify-center min-h-[400px]">
-                                <h3 className="text-[11px] font-bold italic uppercase tracking-widest mb-6 opacity-40 self-start">Wealth Allocation</h3>
-                                <div id="mainChart" className="w-full"></div>
-                            </div>
+                                <div className="dashboard-grid">
+                                    <div className="col-span-12 lg:col-span-7 glass rounded-[48px] p-10 flex flex-col items-center justify-center min-h-[400px]">
+                                        <h3 className="text-[11px] font-bold italic uppercase tracking-widest mb-6 opacity-40 self-start">Wealth Allocation</h3>
+                                        <div id="mainChart" className="w-full"></div>
+                                    </div>
 
-                            <div className="col-span-12 lg:col-span-5 glass rounded-[48px] overflow-hidden flex flex-col border-white/5">
-                                <div className="p-8 border-b border-white/5 flex justify-between items-center bg-white/[0.01]">
-                                    <h3 className="text-[11px] font-bold italic uppercase tracking-widest">Holdings</h3>
-                                    <button onClick={() => setModalOpen(true)} className="w-10 h-10 rounded-2xl neo-gradient text-white font-bold flex items-center justify-center shadow-xl hover:scale-110 active:scale-95 transition-all">+</button>
+                                    <div className="col-span-12 lg:col-span-5 glass rounded-[48px] overflow-hidden flex flex-col border-white/5">
+                                        <div className="p-8 border-b border-white/5 flex justify-between items-center bg-white/[0.01]">
+                                            <h3 className="text-[11px] font-bold italic uppercase tracking-widest">Holdings</h3>
+                                            <button onClick={() => setModalOpen(true)} className="w-10 h-10 rounded-2xl neo-gradient text-white font-bold flex items-center justify-center shadow-xl hover:scale-110 active:scale-95 transition-all">+</button>
+                                        </div>
+                                        <div className="divide-y divide-white/5 overflow-y-auto max-h-[500px] custom-scrollbar">
+                                            {assets.map((a, i) => {
+                                                const sym = a.symbol.toUpperCase();
+                                                const now = marketPrices[sym] || parseFloat(a.buy_price);
+                                                const qty = parseFloat(a.quantity);
+                                                const buy = parseFloat(a.buy_price);
+                                                const pnl = buy > 0 ? ((now - buy) / buy) * 100 : 0;
+                                                return (
+                                                    <div key={i} className="p-7 flex justify-between items-center hover:bg-white/[0.04] transition-all group text-left">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="w-12 h-12 glass rounded-2xl flex items-center justify-center p-2.5 overflow-hidden group-hover:border-indigo-500/50">
+                                                                <AssetIcon src={a.image_url} symbol={a.symbol} />
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-black text-base leading-none mb-1 uppercase">{a.symbol}</p>
+                                                                <p className={`text-[9px] font-bold uppercase ${pnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                                    {pnl >= 0 ? '▲' : '▼'} {Math.abs(pnl).toFixed(2)}%
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className="font-black text-base italic leading-none mb-1">€{(qty * now).toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</p>
+                                                            <p className="text-[10px] text-zinc-500 font-bold italic">Avg €{buy.toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</p>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="divide-y divide-white/5 overflow-y-auto max-h-[500px] custom-scrollbar">
-                                    {assets.map((a, i) => {
-                                        const sym = a.symbol.toUpperCase();
-                                        const now = marketPrices[sym] || parseFloat(a.buy_price);
-                                        const pnl = ((now - parseFloat(a.buy_price)) / parseFloat(a.buy_price)) * 100;
-                                        return (
-                                            <div key={i} onClick={() => setSelectedAsset(a)} className="p-7 flex justify-between items-center hover:bg-white/[0.04] transition-all group cursor-pointer text-left">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="w-12 h-12 glass rounded-2xl flex items-center justify-center p-2.5 overflow-hidden group-hover:border-indigo-500/50">
-                                                        <AssetIcon src={a.image_url} symbol={a.symbol} />
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-black text-base leading-none mb-1 uppercase">{a.symbol}</p>
-                                                        <p className={`text-[9px] font-bold uppercase ${pnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                                            {pnl >= 0 ? '▲' : '▼'} {Math.abs(pnl).toFixed(2)}%
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <div className="text-right">
-                                                    <p className="font-black text-base italic leading-none mb-1">€{(parseFloat(a.quantity) * now).toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</p>
-                                                    <p className="text-[10px] text-zinc-500 font-bold italic">Avg €{parseFloat(a.buy_price).toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</p>
-                                                </div>
+                            </div>
+                        )}
+
+                        {view === 'ai' && (
+                            <div className="max-w-4xl mx-auto animate-in slide-in-from-bottom-10 duration-700">
+                                <h2 className="text-5xl font-black italic text-gradient uppercase text-center mb-12">Neural Analysis</h2>
+                                {loadingAi ? (
+                                    <div className="flex flex-col items-center py-20">
+                                        <div className="w-16 h-16 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin mb-6"></div>
+                                        <p className="text-zinc-500 font-black text-[10px] uppercase tracking-[0.3em] animate-pulse italic">Scanning global data & local assets...</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid gap-8">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="glass p-10 rounded-[40px] text-center border-indigo-500/20">
+                                                <p className="text-[10px] font-black text-zinc-500 uppercase mb-2 tracking-widest">Market Pulse</p>
+                                                <p className="text-3xl font-black italic text-indigo-400 uppercase">{aiData?.sentiment}</p>
                                             </div>
-                                        );
-                                    })}
+                                            <div className="glass p-10 rounded-[40px] text-center border-purple-500/20">
+                                                <p className="text-[10px] font-black text-zinc-500 uppercase mb-2 tracking-widest">Health Score</p>
+                                                <p className="text-5xl font-black italic">{aiData?.score}%</p>
+                                            </div>
+                                        </div>
+                                        <div className="glass p-10 rounded-[50px] border-white/10">
+                                            <h3 className="text-xs font-black text-indigo-500 uppercase tracking-widest mb-8">Strategic Intelligence</h3>
+                                            <div className="space-y-4">
+                                                {aiData?.insights.map((ins, i) => (
+                                                    <div key={i} className="p-6 bg-white/[0.03] border border-white/5 rounded-3xl font-medium text-zinc-300 italic flex gap-4">
+                                                        <span className="text-indigo-500">⚡</span> {ins}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <div className="mt-10 p-8 neo-gradient rounded-[32px] text-center">
+                                                <p className="text-[10px] font-black uppercase mb-1 opacity-80 tracking-widest">Recommended Action</p>
+                                                <p className="font-black text-xl italic uppercase">{aiData?.next_action}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {view === 'settings' && (
+                            <div className="max-w-2xl mx-auto animate-in fade-in duration-500">
+                                <h2 className="text-4xl font-black italic text-gradient uppercase mb-10">Engine Settings</h2>
+                                <div className="glass rounded-[40px] divide-y divide-white/5">
+                                    <div className="p-8 flex justify-between items-center">
+                                        <div><p className="font-black uppercase">AES-256 Encryption</p><p className="text-[10px] text-zinc-500 font-bold uppercase">Database security status</p></div>
+                                        <div className="text-emerald-500 font-black italic">ACTIVE</div>
+                                    </div>
+                                    <div className="p-8 flex justify-between items-center">
+                                        <div><p className="font-black uppercase">Base Currency</p><p className="text-[10px] text-zinc-500 font-bold uppercase">Euro (EUR)</p></div>
+                                        <div className="text-zinc-300 font-black italic">DEFAULT</div>
+                                    </div>
+                                    <div onClick={() => alert('Wiping local cache...')} className="p-8 flex justify-between items-center hover:bg-rose-500/10 cursor-pointer transition-all group">
+                                        <div><p className="font-black uppercase group-hover:text-rose-500">Wipe Engine Data</p><p className="text-[10px] text-zinc-500 font-bold uppercase">Clear all entries</p></div>
+                                        <div className="text-zinc-600 font-black italic group-hover:text-rose-500 text-xs uppercase tracking-widest">Reset</div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        )}
                     </main>
 
-                    <nav className="fixed bottom-10 left-1/2 -translate-x-1/2 w-[90%] max-w-sm glass rounded-[35px] h-24 flex justify-around items-center px-4 z-[100] border-white/10 shadow-2xl">
-                        <div onClick={() => setSelectedAsset(null)} className="text-indigo-400 font-black text-[9px] uppercase tracking-widest cursor-pointer group flex flex-col items-center gap-1"><span className="w-1 h-1 bg-indigo-400 rounded-full"></span>Dash</div>
-                        <div onClick={() => setModalOpen(true)} className="w-16 h-16 neo-gradient rounded-full flex items-center justify-center text-3xl font-light -translate-y-12 shadow-2xl border-[8px] border-[#000] active:scale-90 transition-all cursor-pointer text-white">+</div>
-                        <div className="text-zinc-600 font-black text-[9px] uppercase tracking-widest italic cursor-not-allowed">Profile</div>
+                    {/* DOCK NAVIGATION */}
+                    <nav className="fixed bottom-10 left-1/2 -translate-x-1/2 w-[90%] max-w-sm glass rounded-[35px] h-24 flex justify-around items-center px-6 z-50 border-white/10 shadow-2xl">
+                        <button onClick={() => setView('dash')} className={`flex flex-col items-center gap-1 transition-all ${view === 'dash' ? 'text-indigo-400 scale-110' : 'text-zinc-600'}`}>
+                            <span className="text-[10px] font-black uppercase italic tracking-tighter">Dash</span>
+                        </button>
+
+                        <button onClick={runAI} className="w-20 h-20 neo-gradient rounded-full flex items-center justify-center ai-glow transition-all active:scale-90 relative">
+                            <span className="text-white font-black italic text-2xl">AI</span>
+                        </button>
+
+                        <button onClick={() => setView('settings')} className={`flex flex-col items-center gap-1 transition-all ${view === 'settings' ? 'text-indigo-400 scale-110' : 'text-zinc-600'}`}>
+                            <span className="text-[10px] font-black uppercase italic tracking-tighter">Defs</span>
+                        </button>
                     </nav>
 
+                    {/* MODAL ADICIONAR ATIVO */}
                     {isModalOpen && (
-                        <div className="fixed inset-0 z-[200] flex items-center justify-center p-8 bg-black/95 backdrop-blur-md">
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-8 bg-black/95 backdrop-blur-2xl">
                             <form onSubmit={handleAddAsset} className="glass w-full max-w-lg rounded-[48px] p-10 md:p-12 relative shadow-3xl">
-                                <button type="button" onClick={() => setModalOpen(false)} className="absolute top-10 right-10 text-zinc-500 font-black text-xs italic uppercase">Close [X]</button>
-                                <h2 className="text-3xl font-black italic tracking-tighter mb-10 text-gradient uppercase text-center leading-none">New Acquisition</h2>
+                                <button type="button" onClick={() => setModalOpen(false)} className="absolute top-10 right-10 text-zinc-500 font-black text-xs italic uppercase tracking-widest">Close [x]</button>
+                                <h2 className="text-3xl font-black italic text-gradient uppercase mb-10 text-center leading-none">New Acquisition</h2>
                                 <div className="space-y-8">
                                     <div className="relative">
                                         <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-3 block italic text-left">Search Network</label>
@@ -257,7 +342,7 @@
                                         <input required type="number" step="any" placeholder="Qty" value={formData.quantity} onChange={(e) => setFormData({...formData, quantity: e.target.value})} className="w-full bg-white/[0.03] border border-white/10 rounded-3xl p-6 outline-none focus:border-indigo-500 font-bold" />
                                         <input required type="number" step="any" placeholder="Buy Price €" value={formData.price} onChange={(e) => setFormData({...formData, price: e.target.value})} className="w-full bg-white/[0.03] border border-white/10 rounded-3xl p-6 outline-none focus:border-indigo-500 font-bold" />
                                     </div>
-                                    <button type="submit" className="w-full h-20 neo-gradient rounded-[32px] font-black uppercase text-xs tracking-[0.4em] shadow-xl text-white">Execute Trade</button>
+                                    <button type="submit" className="w-full h-20 neo-gradient rounded-[32px] font-black uppercase text-xs tracking-[0.4em] shadow-xl text-white italic">Execute Trade</button>
                                 </div>
                             </form>
                         </div>
