@@ -46,8 +46,10 @@
             const [chatMessages, setChatMessages] = useState([{ role: 'ai', text: 'Olá, eu sou a Wealth AI, em que te posso ajudar?' }]);
             const [userInput, setUserInput] = useState('');
             const [isModalOpen, setModalOpen] = useState(false);
+            const [modalMode, setModalMode] = useState('add'); 
+            const [selectedAsset, setSelectedAsset] = useState(null);
             const [searchResults, setSearchResults] = useState([]);
-            const [formData, setFormData] = useState({ symbol: '', name: '', quantity: '', price: '', type: 'crypto', thumb: '' });
+            const [formData, setFormData] = useState({ symbol: '', name: '', quantity: '', price: '', type: 'crypto', thumb: '', dca_amount: 0 });
             const chatEndRef = useRef(null);
 
             const cryptoMap = { 'BTC': 'bitcoin', 'ETH': 'ethereum', 'SOL': 'solana', 'ADA': 'cardano', 'BNB': 'binancecoin', 'XRP': 'ripple' };
@@ -125,6 +127,40 @@
                 fetchData();
             };
 
+            const handleUpdateDCA = async (e) => {
+                e.preventDefault();
+                await fetch('api/dca_handler.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        action: 'toggle_dca', 
+                        id: selectedAsset.id, 
+                        active: formData.dca_amount > 0, 
+                        amount: formData.dca_amount 
+                    })
+                });
+                setModalOpen(false);
+                fetchData();
+            };
+
+            const executeDCA = async (assetId, currentPrice, symbol, amount) => {
+                if(!confirm(`Executar aporte de €${amount} em ${symbol}?`)) return;
+                await fetch('api/dca_handler.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'execute_dca', id: assetId, current_price: currentPrice })
+                });
+                fetchData();
+            };
+
+            const calculateProjection = (monthly) => {
+                const years = 2050 - new Date().getFullYear();
+                if (years <= 0 || !monthly) return 0;
+                const r = 0.08 / 12; 
+                const n = years * 12;
+                return monthly * ((Math.pow(1 + r, n) - 1) / r);
+            };
+
             const stats = useMemo(() => {
                 let invested = 0, current = 0;
                 assets.forEach(a => {
@@ -188,23 +224,42 @@
                                     <div className="lg:col-span-5 glass rounded-[30px] flex flex-col overflow-hidden">
                                         <div className="p-5 border-b border-white/5 flex justify-between items-center bg-white/[0.01]">
                                             <h3 className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Holdings</h3>
-                                            <button onClick={() => setModalOpen(true)} className="w-8 h-8 rounded-lg neo-gradient text-white font-bold shadow-lg">+</button>
+                                            <button onClick={() => { setModalMode('add'); setModalOpen(true); }} className="w-8 h-8 rounded-lg neo-gradient text-white font-bold shadow-lg">+</button>
                                         </div>
                                         <div className="divide-y divide-white/5 overflow-y-auto max-h-[350px] no-scrollbar">
                                             {assets.map((a, i) => {
                                                 const now = marketPrices[a.symbol.toUpperCase()] || parseFloat(a.buy_price);
                                                 return (
                                                     <div key={i} className="p-4 flex justify-between items-center active:bg-white/[0.03]">
-                                                        <div className="flex items-center gap-3">
+                                                        <div className="flex items-center gap-3 cursor-pointer" onClick={() => {
+                                                            setSelectedAsset(a);
+                                                            setFormData({ ...formData, dca_amount: a.dca_monthly_amount });
+                                                            setModalMode('dca_setup');
+                                                            setModalOpen(true);
+                                                        }}>
                                                             <div className="w-10 h-10 glass rounded-xl p-2"><AssetIcon src={a.image_url} symbol={a.symbol} /></div>
                                                             <div>
                                                                 <p className="font-bold text-sm leading-none uppercase">{a.symbol}</p>
                                                                 <p className="text-[10px] text-zinc-500 mt-1">{a.quantity} units</p>
+                                                                {a.is_dca == 1 && (
+                                                                    <div className="flex items-center gap-1 mt-1">
+                                                                        <div className="w-1 h-1 bg-indigo-500 rounded-full animate-pulse"></div>
+                                                                        <span className="text-[8px] font-black text-indigo-400 uppercase tracking-tighter">DCA: €{a.dca_monthly_amount}/mês</span>
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         </div>
-                                                        <div className="text-right">
+                                                        <div className="text-right flex flex-col items-end gap-1">
                                                             <p className="font-black text-sm">€{(a.quantity * now).toLocaleString()}</p>
                                                             <p className={`text-[9px] font-bold uppercase ${now >= a.buy_price ? 'text-emerald-500' : 'text-rose-500'}`}>€{now.toFixed(2)}</p>
+                                                            {a.is_dca == 1 && (
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); executeDCA(a.id, now, a.symbol, a.dca_monthly_amount); }}
+                                                                    className="mt-1 px-2 py-0.5 border border-indigo-500/30 rounded text-[7px] font-black text-indigo-300 hover:bg-indigo-500 hover:text-white transition-all uppercase"
+                                                                >
+                                                                    Executar Mês
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 );
@@ -240,8 +295,8 @@
                                 <div className="fixed bottom-24 left-4 right-4 max-w-2xl mx-auto z-50 space-y-4">
                                     {!loadingAi && (
                                         <div className="flex gap-2 justify-center overflow-x-auto no-scrollbar px-2">
-                                            {["Risco", "Diversificar", "Mercado"].map(btn => (
-                                                <button key={btn} onClick={() => runAI(null, `Analisa o meu ${btn.toLowerCase()}`)} className="whitespace-nowrap px-4 py-2 glass rounded-full text-[9px] font-bold uppercase border-white/10 hover:bg-white/10 tracking-widest shadow-xl">{btn}</button>
+                                            {["Risco", "Diversificar", "Mercado", "DCA 2050"].map(btn => (
+                                                <button key={btn} onClick={() => runAI(null, btn === "DCA 2050" ? "Calcula a minha projeção para 2050 baseada nos meus planos de DCA." : `Analisa o meu ${btn.toLowerCase()}`)} className="whitespace-nowrap px-4 py-2 glass rounded-full text-[9px] font-bold uppercase border-white/10 hover:bg-white/10 tracking-widest shadow-xl">{btn}</button>
                                             ))}
                                         </div>
                                     )}
@@ -277,31 +332,55 @@
                     </nav>
 
                     {isModalOpen && (
-                        <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in">
-                            <form onSubmit={handleAddAsset} className="glass w-full max-w-lg rounded-t-[32px] md:rounded-[32px] p-8 pb-12 md:pb-8 relative border-white/10 shadow-3xl">
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in">
+                            <div className="glass w-full max-w-lg rounded-[32px] p-8 relative border-white/10 shadow-3xl">
                                 <button type="button" onClick={() => setModalOpen(false)} className="absolute top-6 right-6 text-zinc-500">✕</button>
-                                <h2 className="text-lg font-black italic uppercase mb-6 text-gradient">Nova Aquisição</h2>
-                                <div className="space-y-5">
-                                    <div className="relative">
-                                        <input autoFocus onChange={(e) => handleSearch(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl p-4 outline-none focus:border-indigo-500 font-bold" placeholder="Procurar ativo (Ex: BTC)..." />
-                                        {searchResults.length > 0 && (
-                                            <div className="absolute top-full left-0 w-full glass mt-2 rounded-xl overflow-hidden shadow-2xl max-h-40 overflow-y-auto z-50">
-                                                {searchResults.map((s, i) => (
-                                                    <div key={i} onClick={() => { setFormData({...formData, symbol: s.symbol, name: s.name, thumb: s.thumb, type: s.type}); setSearchResults([]); }} className="p-3 flex items-center gap-3 hover:bg-white/5 border-b border-white/5 cursor-pointer">
-                                                        <div className="w-7 h-7 glass rounded-lg overflow-hidden p-1"><AssetIcon src={s.thumb} symbol={s.symbol} /></div>
-                                                        <span className="font-bold text-xs uppercase">{s.name}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
+                                
+                                {modalMode === 'add' ? (
+                                    <form onSubmit={handleAddAsset} className="space-y-5">
+                                        <h2 className="text-lg font-black italic uppercase mb-6 text-gradient">Nova Aquisição</h2>
+                                        <div className="relative">
+                                            <input autoFocus onChange={(e) => handleSearch(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl p-4 outline-none focus:border-indigo-500 font-bold" placeholder="Procurar ativo (Ex: BTC)..." />
+                                            {searchResults.length > 0 && (
+                                                <div className="absolute top-full left-0 w-full glass mt-2 rounded-xl overflow-hidden shadow-2xl max-h-40 overflow-y-auto z-50">
+                                                    {searchResults.map((s, i) => (
+                                                        <div key={i} onClick={() => { setFormData({...formData, symbol: s.symbol, name: s.name, thumb: s.thumb, type: s.type}); setSearchResults([]); }} className="p-3 flex items-center gap-3 hover:bg-white/5 border-b border-white/5 cursor-pointer">
+                                                            <div className="w-7 h-7 glass rounded-lg overflow-hidden p-1"><AssetIcon src={s.thumb} symbol={s.symbol} /></div>
+                                                            <span className="font-bold text-xs uppercase">{s.name}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <input required type="number" step="any" placeholder="Qtd" onChange={(e) => setFormData({...formData, quantity: e.target.value})} className="bg-white/5 border border-white/10 rounded-xl p-4 outline-none font-bold" />
+                                            <input required type="number" step="any" placeholder="Preço €" onChange={(e) => setFormData({...formData, price: e.target.value})} className="bg-white/5 border border-white/10 rounded-xl p-4 outline-none font-bold" />
+                                        </div>
+                                        <button type="submit" className="w-full py-4 neo-gradient rounded-xl font-black uppercase italic shadow-xl active:scale-95 transition-all">Registar Trade</button>
+                                    </form>
+                                ) : (
+                                    <div className="space-y-8 text-center">
+                                        <div>
+                                            <h2 className="text-2xl font-black italic uppercase text-gradient">Configurar DCA</h2>
+                                            <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mt-2">{selectedAsset?.symbol} Strategy</p>
+                                        </div>
+                                        
+                                        <div className="bg-white/5 border border-white/10 rounded-3xl p-6">
+                                            <label className="text-[10px] text-zinc-500 font-black uppercase block mb-4 tracking-widest">Aporte Mensal (€)</label>
+                                            <input autoFocus type="number" value={formData.dca_amount} 
+                                                className="w-full bg-transparent text-5xl font-black text-center outline-none text-white"
+                                                onChange={e => setFormData({...formData, dca_amount: e.target.value})} />
+                                        </div>
+
+                                        <div className="py-4 px-6 glass rounded-2xl border-indigo-500/20 bg-indigo-500/5">
+                                            <p className="text-[10px] text-zinc-400 font-bold uppercase mb-1">Projeção 2050 (Est. 8% p.a.)</p>
+                                            <p className="text-2xl font-black text-indigo-400 italic">€{calculateProjection(formData.dca_amount).toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
+                                        </div>
+
+                                        <button onClick={handleUpdateDCA} className="w-full py-5 neo-gradient rounded-2xl font-black uppercase italic tracking-tighter shadow-xl active:scale-95 transition-all">Guardar Estratégia</button>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <input required type="number" step="any" placeholder="Qtd" onChange={(e) => setFormData({...formData, quantity: e.target.value})} className="bg-white/5 border border-white/10 rounded-xl p-4 outline-none font-bold" />
-                                        <input required type="number" step="any" placeholder="Preço €" onChange={(e) => setFormData({...formData, price: e.target.value})} className="bg-white/5 border border-white/10 rounded-xl p-4 outline-none font-bold" />
-                                    </div>
-                                    <button type="submit" className="w-full py-4 neo-gradient rounded-xl font-black uppercase italic shadow-xl active:scale-95 transition-all">Registar Trade</button>
-                                </div>
-                            </form>
+                                )}
+                            </div>
                         </div>
                     )}
                 </div>
