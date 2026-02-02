@@ -3,60 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>WealthAI | Master Intelligence</title>
+    <title>WealthAI | Intelligence</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100;300;400;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100;300;400;600;700;900&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
     <style>
         :root { --accent: #6366f1; }
-        body { font-family: 'Geist', sans-serif; background: #000; color: #fff; margin: 0; overflow-x: hidden; -webkit-font-smoothing: antialiased; }
-        .glass { background: rgba(15, 15, 15, 0.75); backdrop-filter: blur(40px); border: 1px solid rgba(255, 255, 255, 0.08); }
-        .dropdown-glass { background: rgba(10, 10, 10, 0.98); backdrop-filter: blur(50px); border: 1px solid rgba(255, 255, 255, 0.15); z-index: 999; }
+        body { font-family: 'Geist', sans-serif; background: #000; color: #fff; margin: 0; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+        .glass { background: rgba(18, 18, 18, 0.7); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); border: 1px solid rgba(255, 255, 255, 0.08); }
         .neo-gradient { background: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%); }
-        .text-gradient { background: linear-gradient(to bottom, #fff 20%, #71717a 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .hero-title { font-size: clamp(2.5rem, 10vw, 5rem); line-height: 1; letter-spacing: -0.05em; font-weight: 900; }
-        .dashboard-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 24px; }
-        @media (max-width: 1024px) { .dashboard-grid { display: flex; flex-direction: column; } }
-        .animate-float { animation: float 6s ease-in-out infinite; }
-        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
-        .ai-glow { box-shadow: 0 0 30px rgba(99, 102, 241, 0.5); animation: pulse-ai 2s infinite ease-in-out; }
-        @keyframes pulse-ai { 0%, 100% { transform: scale(1) translateY(-12px); opacity: 0.8; } 50% { transform: scale(1.1) translateY(-15px); opacity: 1; } }
+        .text-gradient { background: linear-gradient(to bottom, #fff 40%, #a1a1aa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .hero-title { font-size: clamp(2rem, 10vw, 4rem); line-height: 1; letter-spacing: -0.05em; font-weight: 900; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .chat-container { height: calc(100vh - 280px); }
+        .bubble-ai { border-radius: 18px 18px 18px 4px; background: rgba(255,255,255,0.05); }
+        .bubble-user { border-radius: 18px 18px 4px 18px; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-in { animation: slideUp 0.4s ease-out forwards; }
     </style>
 </head>
-<body>
+<body class="bg-black">
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect, useMemo, useRef } = React;
 
         const AssetIcon = ({ src, symbol }) => {
             const [error, setError] = useState(false);
-            const initials = symbol ? symbol.split('.')[0].substring(0, 2).toUpperCase() : "??";
-            if (error || !src) return (
-                <div className="w-full h-full neo-gradient flex items-center justify-center text-[10px] font-black italic text-white rounded-xl uppercase">{initials}</div>
-            );
+            const initials = symbol ? symbol.substring(0, 2).toUpperCase() : "??";
+            if (error || !src) return <div className="w-full h-full neo-gradient flex items-center justify-center text-[10px] font-black rounded-xl">{initials}</div>;
             return <img src={src} className="w-full h-full object-contain opacity-90" onError={() => setError(true)} />;
         };
 
         const App = () => {
-            const [view, setView] = useState('dash'); // dash, ai, settings
+            const [view, setView] = useState('dash'); 
             const [assets, setAssets] = useState([]);
             const [marketPrices, setMarketPrices] = useState({});
-            const [aiData, setAiData] = useState(null);
             const [loadingAi, setLoadingAi] = useState(false);
+            const [chatMessages, setChatMessages] = useState([{ role: 'ai', text: 'Olá, eu sou a Wealth AI, em que te posso ajudar?' }]);
+            const [userInput, setUserInput] = useState('');
             const [isModalOpen, setModalOpen] = useState(false);
             const [searchResults, setSearchResults] = useState([]);
             const [formData, setFormData] = useState({ symbol: '', name: '', quantity: '', price: '', type: 'crypto', thumb: '' });
+            const chatEndRef = useRef(null);
 
-            const cryptoMap = { 
-                'BTC': 'bitcoin', 'ETH': 'ethereum', 'SOL': 'solana', 
-                'ADA': 'cardano', 'BNB': 'binancecoin', 'XRP': 'ripple' 
-            };
+            const cryptoMap = { 'BTC': 'bitcoin', 'ETH': 'ethereum', 'SOL': 'solana', 'ADA': 'cardano', 'BNB': 'binancecoin', 'XRP': 'ripple' };
 
             const fetchData = async () => {
                 try {
@@ -81,7 +75,7 @@
                             const id = cryptoMap[sym] || a.symbol.toLowerCase();
                             if(data[id]) updatedPrices[sym] = data[id].eur;
                         });
-                    } catch(e) { console.error("Crypto Price Error", e); }
+                    } catch(e) {}
                 }
                 const stocks = portfolio.filter(a => a.asset_type === 'stock');
                 if(stocks.length > 0) {
@@ -93,49 +87,43 @@
                             const sym = a.symbol.toUpperCase();
                             if(data[sym]) updatedPrices[sym] = data[sym].eur;
                         });
-                    } catch(e) { console.error("Stock Price Error", e); }
+                    } catch(e) {}
                 }
                 setMarketPrices(updatedPrices);
             };
 
+            const runAI = async (e, quickMsg = null) => {
+                if(e) e.preventDefault();
+                const msg = quickMsg || userInput.trim();
+                if(!msg || loadingAi) return;
+                setChatMessages(prev => [...prev, { role: 'user', text: msg }]);
+                setUserInput('');
+                setLoadingAi(true);
+                try {
+                    const res = await fetch('api/ai_engine.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: msg })
+                    });
+                    const data = await res.json();
+                    setChatMessages(prev => [...prev, { role: 'ai', text: data.chat_response }]);
+                } catch (e) { setChatMessages(prev => [...prev, { role: 'ai', text: "Erro neural. Tenta de novo." }]); }
+                finally { setLoadingAi(false); }
+            };
+
             const handleSearch = async (query) => {
                 if (query.length < 2) { setSearchResults([]); return; }
-                try {
-                    const res = await fetch(`api/search.php?q=${query}`);
-                    const data = await res.json();
-                    setSearchResults(Array.isArray(data) ? data : []);
-                } catch (e) { setSearchResults([]); }
+                const res = await fetch(`api/search.php?q=${query}`);
+                const data = await res.json();
+                setSearchResults(Array.isArray(data) ? data : []);
             };
 
             const handleAddAsset = async (e) => {
                 e.preventDefault();
-                try {
-                    const res = await fetch('api/assets.php', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(formData)
-                    });
-                    const result = await res.json();
-                    if(result.status === 'success') {
-                        setModalOpen(false);
-                        setFormData({ symbol: '', name: '', quantity: '', price: '', type: 'crypto', thumb: '' });
-                        fetchData();
-                    }
-                } catch (e) { console.error("Add Asset Error", e); }
+                await fetch('api/assets.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData) });
+                setModalOpen(false);
+                fetchData();
             };
-
-            const runAI = async () => {
-                setView('ai');
-                setLoadingAi(true);
-                try {
-                    const res = await fetch('api/ai_engine.php');
-                    const data = await res.json();
-                    setAiData(data);
-                } catch (e) { console.error("AI Engine Error", e); }
-                finally { setLoadingAi(false); }
-            };
-
-            useEffect(() => { fetchData(); }, []);
 
             const stats = useMemo(() => {
                 let invested = 0, current = 0;
@@ -152,86 +140,71 @@
                 return { current, profit, pct };
             }, [assets, marketPrices]);
 
-            const renderMainChart = () => {
-                const el = document.querySelector("#mainChart");
-                if(!el || !assets.length || view !== 'dash') return;
-                const series = assets.map(a => {
-                    const now = marketPrices[a.symbol.toUpperCase()] || parseFloat(a.buy_price);
-                    return parseFloat(a.quantity) * now;
-                });
-                const options = {
-                    series: series,
-                    chart: { type: 'donut', height: 320, background: 'transparent' },
-                    labels: assets.map(a => a.symbol.toUpperCase()),
-                    colors: ['#6366f1', '#a855f7', '#ec4899', '#3b82f6', '#10b981'],
-                    legend: { show: false },
-                    stroke: { show: false },
-                    plotOptions: { pie: { donut: { size: '75%', background: 'transparent' } } },
-                    dataLabels: { enabled: false }
-                };
-                el.innerHTML = ""; 
-                new ApexCharts(el, options).render();
-            };
+            useEffect(() => { fetchData(); }, []);
+            useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages]);
 
-            useEffect(() => { renderMainChart(); }, [assets, marketPrices, view]);
+            useEffect(() => {
+                if(view === 'dash' && assets.length > 0) {
+                    const options = {
+                        series: assets.map(a => (parseFloat(a.quantity) * (marketPrices[a.symbol.toUpperCase()] || parseFloat(a.buy_price)))),
+                        chart: { type: 'donut', height: 280 },
+                        labels: assets.map(a => a.symbol.toUpperCase()),
+                        colors: ['#6366f1', '#a855f7', '#ec4899', '#3b82f6', '#10b981'],
+                        stroke: { show: false },
+                        legend: { show: false },
+                        dataLabels: { enabled: false }
+                    };
+                    const chart = new ApexCharts(document.querySelector("#mainChart"), options);
+                    chart.render();
+                    return () => chart.destroy();
+                }
+            }, [view, assets, marketPrices]);
 
             return (
-                <div className="min-h-screen pb-40">
-                    <header className="safe-top px-10 py-10 flex justify-between items-center sticky top-0 z-40 bg-black/60 backdrop-blur-xl border-b border-white/5">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 neo-gradient rounded-xl rotate-12 flex items-center justify-center shadow-lg"><span className="font-black italic">W</span></div>
-                            <h1 className="text-xl font-black italic tracking-tighter uppercase leading-none">WealthAI</h1>
+                <div className="h-screen flex flex-col bg-black overflow-hidden">
+                    <header className="p-5 flex justify-between items-center border-b border-white/5 bg-black/50 backdrop-blur-xl z-50">
+                        <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 neo-gradient rounded-lg flex items-center justify-center shadow-lg rotate-3"><span className="font-black italic text-sm">W</span></div>
+                            <span className="font-black tracking-tighter uppercase text-sm italic">WealthAI</span>
                         </div>
-                        <div className="px-4 py-2 glass rounded-full text-[10px] font-bold text-zinc-500 uppercase tracking-widest italic">{view === 'ai' ? 'Neural Link' : 'Live Feed'}</div>
+                        <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_#10b981]"></div>
                     </header>
 
-                    <main className="px-6 md:px-10 max-w-7xl mx-auto mt-12">
+                    <main className="flex-1 overflow-y-auto no-scrollbar relative pb-24">
                         {view === 'dash' && (
-                            <div className="animate-in fade-in duration-700">
-                                <section className="mb-16 text-center animate-float">
-                                    <p className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.4em] mb-4 opacity-60 italic text-center">Consolidated Valuation</p>
-                                    <h2 className="hero-title text-gradient italic mb-6 uppercase text-center">
-                                        €{stats.current.toLocaleString('pt-PT', { minimumFractionDigits: 2 })}
-                                    </h2>
-                                    <div className={`inline-block px-6 py-2 rounded-full glass border ${stats.profit >= 0 ? 'border-emerald-500/20 text-emerald-400' : 'border-rose-500/20 text-rose-400'} font-bold text-sm italic`}>
-                                        {stats.profit >= 0 ? '▲' : '▼'} €{Math.abs(stats.profit).toLocaleString('pt-PT', { minimumFractionDigits: 2 })} ({stats.pct.toFixed(2)}%)
+                            <div className="p-4 space-y-6 animate-in">
+                                <section className="text-center py-6">
+                                    <p className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.4em] mb-1">Portfolio Valuation</p>
+                                    <h2 className="hero-title text-gradient italic uppercase">€{stats.current.toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</h2>
+                                    <div className={`mt-3 inline-flex items-center px-4 py-1 glass rounded-full border ${stats.profit >= 0 ? 'border-emerald-500/20 text-emerald-400' : 'border-rose-500/20 text-rose-400'} font-bold text-[10px]`}>
+                                        {stats.profit >= 0 ? '▲' : '▼'} €{Math.abs(stats.profit).toFixed(2)} ({stats.pct.toFixed(2)}%)
                                     </div>
                                 </section>
 
-                                <div className="dashboard-grid">
-                                    <div className="col-span-12 lg:col-span-7 glass rounded-[48px] p-10 flex flex-col items-center justify-center min-h-[400px]">
-                                        <h3 className="text-[11px] font-bold italic uppercase tracking-widest mb-6 opacity-40 self-start">Wealth Allocation</h3>
-                                        <div id="mainChart" className="w-full"></div>
+                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 max-w-6xl mx-auto">
+                                    <div className="lg:col-span-7 glass rounded-[30px] p-6 flex flex-col items-center justify-center min-h-[300px]">
+                                        <div id="mainChart" className="w-full max-w-[260px]"></div>
                                     </div>
-
-                                    <div className="col-span-12 lg:col-span-5 glass rounded-[48px] overflow-hidden flex flex-col border-white/5">
-                                        <div className="p-8 border-b border-white/5 flex justify-between items-center bg-white/[0.01]">
-                                            <h3 className="text-[11px] font-bold italic uppercase tracking-widest">Holdings</h3>
-                                            <button onClick={() => setModalOpen(true)} className="w-10 h-10 rounded-2xl neo-gradient text-white font-bold flex items-center justify-center shadow-xl hover:scale-110 active:scale-95 transition-all">+</button>
+                                    <div className="lg:col-span-5 glass rounded-[30px] flex flex-col overflow-hidden">
+                                        <div className="p-5 border-b border-white/5 flex justify-between items-center bg-white/[0.01]">
+                                            <h3 className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Holdings</h3>
+                                            <button onClick={() => setModalOpen(true)} className="w-8 h-8 rounded-lg neo-gradient text-white font-bold shadow-lg">+</button>
                                         </div>
-                                        <div className="divide-y divide-white/5 overflow-y-auto max-h-[500px] custom-scrollbar">
+                                        <div className="divide-y divide-white/5 overflow-y-auto max-h-[350px] no-scrollbar">
                                             {assets.map((a, i) => {
-                                                const sym = a.symbol.toUpperCase();
-                                                const now = marketPrices[sym] || parseFloat(a.buy_price);
-                                                const qty = parseFloat(a.quantity);
-                                                const buy = parseFloat(a.buy_price);
-                                                const pnl = buy > 0 ? ((now - buy) / buy) * 100 : 0;
+                                                const now = marketPrices[a.symbol.toUpperCase()] || parseFloat(a.buy_price);
                                                 return (
-                                                    <div key={i} className="p-7 flex justify-between items-center hover:bg-white/[0.04] transition-all group text-left">
-                                                        <div className="flex items-center gap-4">
-                                                            <div className="w-12 h-12 glass rounded-2xl flex items-center justify-center p-2.5 overflow-hidden group-hover:border-indigo-500/50">
-                                                                <AssetIcon src={a.image_url} symbol={a.symbol} />
-                                                            </div>
+                                                    <div key={i} className="p-4 flex justify-between items-center active:bg-white/[0.03]">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-10 h-10 glass rounded-xl p-2"><AssetIcon src={a.image_url} symbol={a.symbol} /></div>
                                                             <div>
-                                                                <p className="font-black text-base leading-none mb-1 uppercase">{a.symbol}</p>
-                                                                <p className={`text-[9px] font-bold uppercase ${pnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                                                    {pnl >= 0 ? '▲' : '▼'} {Math.abs(pnl).toFixed(2)}%
-                                                                </p>
+                                                                <p className="font-bold text-sm leading-none uppercase">{a.symbol}</p>
+                                                                <p className="text-[10px] text-zinc-500 mt-1">{a.quantity} units</p>
                                                             </div>
                                                         </div>
                                                         <div className="text-right">
-                                                            <p className="font-black text-base italic leading-none mb-1">€{(qty * now).toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</p>
-                                                            <p className="text-[10px] text-zinc-500 font-bold italic">Avg €{buy.toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</p>
+                                                            <p className="font-black text-sm">€{(a.quantity * now).toLocaleString()}</p>
+                                                            <p className={`text-[9px] font-bold uppercase ${now >= a.buy_price ? 'text-emerald-500' : 'text-rose-500'}`}>€{now.toFixed(2)}</p>
                                                         </div>
                                                     </div>
                                                 );
@@ -243,106 +216,90 @@
                         )}
 
                         {view === 'ai' && (
-                            <div className="max-w-4xl mx-auto animate-in slide-in-from-bottom-10 duration-700">
-                                <h2 className="text-5xl font-black italic text-gradient uppercase text-center mb-12">Neural Analysis</h2>
-                                {loadingAi ? (
-                                    <div className="flex flex-col items-center py-20">
-                                        <div className="w-16 h-16 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin mb-6"></div>
-                                        <p className="text-zinc-500 font-black text-[10px] uppercase tracking-[0.3em] animate-pulse italic">Scanning global data & local assets...</p>
-                                    </div>
-                                ) : (
-                                    <div className="grid gap-8">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <div className="glass p-10 rounded-[40px] text-center border-indigo-500/20">
-                                                <p className="text-[10px] font-black text-zinc-500 uppercase mb-2 tracking-widest">Market Pulse</p>
-                                                <p className="text-3xl font-black italic text-indigo-400 uppercase">{aiData?.sentiment}</p>
-                                            </div>
-                                            <div className="glass p-10 rounded-[40px] text-center border-purple-500/20">
-                                                <p className="text-[10px] font-black text-zinc-500 uppercase mb-2 tracking-widest">Health Score</p>
-                                                <p className="text-5xl font-black italic">{aiData?.score}%</p>
+                            <div className="max-w-2xl mx-auto h-full flex flex-col p-4 animate-in">
+                                <div className="flex-1 overflow-y-auto no-scrollbar space-y-4 pt-4 pb-40 chat-container">
+                                    {chatMessages.map((m, i) => (
+                                        <div key={i} className={`flex ${m.role === 'ai' ? 'justify-start' : 'justify-end'} animate-in`}>
+                                            <div className={`max-w-[85%] p-4 text-sm leading-relaxed shadow-lg ${m.role === 'ai' ? 'glass border-white/10 text-zinc-300 bubble-ai' : 'neo-gradient text-white font-bold bubble-user shadow-indigo-500/20'}`}>
+                                                {m.text}
                                             </div>
                                         </div>
-                                        <div className="glass p-10 rounded-[50px] border-white/10">
-                                            <h3 className="text-xs font-black text-indigo-500 uppercase tracking-widest mb-8">Strategic Intelligence</h3>
-                                            <div className="space-y-4">
-                                                {aiData?.insights.map((ins, i) => (
-                                                    <div key={i} className="p-6 bg-white/[0.03] border border-white/5 rounded-3xl font-medium text-zinc-300 italic flex gap-4">
-                                                        <span className="text-indigo-500">⚡</span> {ins}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                            <div className="mt-10 p-8 neo-gradient rounded-[32px] text-center">
-                                                <p className="text-[10px] font-black uppercase mb-1 opacity-80 tracking-widest">Recommended Action</p>
-                                                <p className="font-black text-xl italic uppercase">{aiData?.next_action}</p>
+                                    ))}
+                                    {loadingAi && (
+                                        <div className="flex justify-start">
+                                            <div className="glass border-white/10 p-4 rounded-2xl flex gap-1 animate-pulse">
+                                                <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></div>
+                                                <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full opacity-50"></div>
+                                                <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full opacity-20"></div>
                                             </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
+                                    <div ref={chatEndRef} />
+                                </div>
+
+                                <div className="fixed bottom-24 left-4 right-4 max-w-2xl mx-auto z-50 space-y-4">
+                                    {!loadingAi && (
+                                        <div className="flex gap-2 justify-center overflow-x-auto no-scrollbar px-2">
+                                            {["Risco", "Diversificar", "Mercado"].map(btn => (
+                                                <button key={btn} onClick={() => runAI(null, `Analisa o meu ${btn.toLowerCase()}`)} className="whitespace-nowrap px-4 py-2 glass rounded-full text-[9px] font-bold uppercase border-white/10 hover:bg-white/10 tracking-widest shadow-xl">{btn}</button>
+                                            ))}
+                                        </div>
+                                    )}
+                                    <form onSubmit={runAI} className="relative shadow-2xl">
+                                        <input value={userInput} onChange={(e) => setUserInput(e.target.value)} className="w-full bg-zinc-900/90 border border-white/10 rounded-2xl px-5 py-4 pr-24 outline-none focus:border-indigo-500/50 transition-all text-sm backdrop-blur-xl" placeholder="Fala com o WealthAI..." />
+                                        <button type="submit" disabled={loadingAi} className="absolute right-2 top-2 bottom-2 px-6 neo-gradient rounded-xl font-black text-[10px] uppercase italic active:scale-95 disabled:opacity-30 transition-all">Enviar</button>
+                                    </form>
+                                </div>
                             </div>
                         )}
 
                         {view === 'settings' && (
-                            <div className="max-w-2xl mx-auto animate-in fade-in duration-500">
-                                <h2 className="text-4xl font-black italic text-gradient uppercase mb-10">Engine Settings</h2>
-                                <div className="glass rounded-[40px] divide-y divide-white/5">
-                                    <div className="p-8 flex justify-between items-center">
-                                        <div><p className="font-black uppercase">AES-256 Encryption</p><p className="text-[10px] text-zinc-500 font-bold uppercase">Database security status</p></div>
-                                        <div className="text-emerald-500 font-black italic">ACTIVE</div>
+                            <div className="p-4 max-w-2xl mx-auto space-y-6 animate-in">
+                                <h2 className="text-3xl font-black italic text-gradient uppercase mb-6">Engine</h2>
+                                <div className="glass rounded-[24px] overflow-hidden divide-y divide-white/5">
+                                    <div className="p-5 flex justify-between items-center">
+                                        <div><p className="font-bold text-sm uppercase">AES-256 Cloud</p><p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">Encriptação Ativa</p></div>
+                                        <span className="text-emerald-500 font-black text-[10px] italic">SECURE</span>
                                     </div>
-                                    <div className="p-8 flex justify-between items-center">
-                                        <div><p className="font-black uppercase">Base Currency</p><p className="text-[10px] text-zinc-500 font-bold uppercase">Euro (EUR)</p></div>
-                                        <div className="text-zinc-300 font-black italic">DEFAULT</div>
-                                    </div>
-                                    <div onClick={() => alert('Wiping local cache...')} className="p-8 flex justify-between items-center hover:bg-rose-500/10 cursor-pointer transition-all group">
-                                        <div><p className="font-black uppercase group-hover:text-rose-500">Wipe Engine Data</p><p className="text-[10px] text-zinc-500 font-bold uppercase">Clear all entries</p></div>
-                                        <div className="text-zinc-600 font-black italic group-hover:text-rose-500 text-xs uppercase tracking-widest">Reset</div>
+                                    <div onClick={() => alert('Clear!')} className="p-5 bg-rose-500/5 active:bg-rose-500/10 cursor-pointer flex justify-between items-center text-rose-500 font-bold uppercase text-xs">
+                                        <span>Limpar Cache de Dados</span>
+                                        <span>✕</span>
                                     </div>
                                 </div>
                             </div>
                         )}
                     </main>
 
-                    {/* DOCK NAVIGATION */}
-                    <nav className="fixed bottom-10 left-1/2 -translate-x-1/2 w-[90%] max-w-sm glass rounded-[35px] h-24 flex justify-around items-center px-6 z-50 border-white/10 shadow-2xl">
-                        <button onClick={() => setView('dash')} className={`flex flex-col items-center gap-1 transition-all ${view === 'dash' ? 'text-indigo-400 scale-110' : 'text-zinc-600'}`}>
-                            <span className="text-[10px] font-black uppercase italic tracking-tighter">Dash</span>
-                        </button>
-
-                        <button onClick={runAI} className="w-20 h-20 neo-gradient rounded-full flex items-center justify-center ai-glow transition-all active:scale-90 relative">
-                            <span className="text-white font-black italic text-2xl">AI</span>
-                        </button>
-
-                        <button onClick={() => setView('settings')} className={`flex flex-col items-center gap-1 transition-all ${view === 'settings' ? 'text-indigo-400 scale-110' : 'text-zinc-600'}`}>
-                            <span className="text-[10px] font-black uppercase italic tracking-tighter">Defs</span>
-                        </button>
+                    <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-[340px] glass rounded-[24px] h-14 flex justify-around items-center px-2 z-[60] border border-white/10 shadow-3xl">
+                        <button onClick={() => setView('dash')} className={`flex flex-col items-center gap-1 transition-all ${view === 'dash' ? 'text-indigo-400 scale-110' : 'opacity-40 grayscale'}`}><span className="text-[9px] font-black uppercase tracking-tighter">Dash</span></button>
+                        <button onClick={() => setView('ai')} className={`w-10 h-10 neo-gradient rounded-full flex items-center justify-center transition-all active:scale-90 shadow-xl ${view === 'ai' ? 'scale-125' : 'opacity-40 grayscale'}`}><span className="text-white font-black italic text-[10px]">AI</span></button>
+                        <button onClick={() => setView('settings')} className={`flex flex-col items-center gap-1 transition-all ${view === 'settings' ? 'text-indigo-400 scale-110' : 'opacity-40 grayscale'}`}><span className="text-[9px] font-black uppercase tracking-tighter">Defs</span></button>
                     </nav>
 
-                    {/* MODAL ADICIONAR ATIVO */}
                     {isModalOpen && (
-                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-8 bg-black/95 backdrop-blur-2xl">
-                            <form onSubmit={handleAddAsset} className="glass w-full max-w-lg rounded-[48px] p-10 md:p-12 relative shadow-3xl">
-                                <button type="button" onClick={() => setModalOpen(false)} className="absolute top-10 right-10 text-zinc-500 font-black text-xs italic uppercase tracking-widest">Close [x]</button>
-                                <h2 className="text-3xl font-black italic text-gradient uppercase mb-10 text-center leading-none">New Acquisition</h2>
-                                <div className="space-y-8">
+                        <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in">
+                            <form onSubmit={handleAddAsset} className="glass w-full max-w-lg rounded-t-[32px] md:rounded-[32px] p-8 pb-12 md:pb-8 relative border-white/10 shadow-3xl">
+                                <button type="button" onClick={() => setModalOpen(false)} className="absolute top-6 right-6 text-zinc-500">✕</button>
+                                <h2 className="text-lg font-black italic uppercase mb-6 text-gradient">Nova Aquisição</h2>
+                                <div className="space-y-5">
                                     <div className="relative">
-                                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-3 block italic text-left">Search Network</label>
-                                        <input autoFocus onChange={(e) => handleSearch(e.target.value)} className="w-full bg-white/[0.03] border border-white/10 rounded-3xl px-8 py-6 focus:border-indigo-500 outline-none transition-all font-bold text-lg" placeholder="eg: Apple, Bitcoin..." />
+                                        <input autoFocus onChange={(e) => handleSearch(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl p-4 outline-none focus:border-indigo-500 font-bold" placeholder="Procurar ativo (Ex: BTC)..." />
                                         {searchResults.length > 0 && (
-                                            <div className="absolute top-full left-0 w-full dropdown-glass mt-4 rounded-[32px] overflow-hidden shadow-2xl max-h-64 overflow-y-auto custom-scrollbar">
+                                            <div className="absolute top-full left-0 w-full glass mt-2 rounded-xl overflow-hidden shadow-2xl max-h-40 overflow-y-auto z-50">
                                                 {searchResults.map((s, i) => (
-                                                    <div key={i} onClick={() => { setFormData({...formData, symbol: s.symbol, name: s.name, thumb: s.thumb, type: s.type}); setSearchResults([]); }} className="p-6 flex items-center gap-5 hover:bg-indigo-500/20 cursor-pointer border-b border-white/5 transition-all text-left">
-                                                        <div className="w-10 h-10 glass rounded-xl flex items-center justify-center overflow-hidden p-1.5 bg-black/40"><AssetIcon src={s.thumb} symbol={s.symbol} /></div>
-                                                        <div className="flex-1 text-left"><p className="font-black text-sm italic tracking-tight">{s.name}</p><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{s.symbol} • {s.type}</p></div>
+                                                    <div key={i} onClick={() => { setFormData({...formData, symbol: s.symbol, name: s.name, thumb: s.thumb, type: s.type}); setSearchResults([]); }} className="p-3 flex items-center gap-3 hover:bg-white/5 border-b border-white/5 cursor-pointer">
+                                                        <div className="w-7 h-7 glass rounded-lg overflow-hidden p-1"><AssetIcon src={s.thumb} symbol={s.symbol} /></div>
+                                                        <span className="font-bold text-xs uppercase">{s.name}</span>
                                                     </div>
                                                 ))}
                                             </div>
                                         )}
                                     </div>
-                                    <div className="grid grid-cols-2 gap-6">
-                                        <input required type="number" step="any" placeholder="Qty" value={formData.quantity} onChange={(e) => setFormData({...formData, quantity: e.target.value})} className="w-full bg-white/[0.03] border border-white/10 rounded-3xl p-6 outline-none focus:border-indigo-500 font-bold" />
-                                        <input required type="number" step="any" placeholder="Buy Price €" value={formData.price} onChange={(e) => setFormData({...formData, price: e.target.value})} className="w-full bg-white/[0.03] border border-white/10 rounded-3xl p-6 outline-none focus:border-indigo-500 font-bold" />
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <input required type="number" step="any" placeholder="Qtd" onChange={(e) => setFormData({...formData, quantity: e.target.value})} className="bg-white/5 border border-white/10 rounded-xl p-4 outline-none font-bold" />
+                                        <input required type="number" step="any" placeholder="Preço €" onChange={(e) => setFormData({...formData, price: e.target.value})} className="bg-white/5 border border-white/10 rounded-xl p-4 outline-none font-bold" />
                                     </div>
-                                    <button type="submit" className="w-full h-20 neo-gradient rounded-[32px] font-black uppercase text-xs tracking-[0.4em] shadow-xl text-white italic">Execute Trade</button>
+                                    <button type="submit" className="w-full py-4 neo-gradient rounded-xl font-black uppercase italic shadow-xl active:scale-95 transition-all">Registar Trade</button>
                                 </div>
                             </form>
                         </div>
@@ -350,9 +307,7 @@
                 </div>
             );
         };
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
     </script>
 </body>
 </html>
